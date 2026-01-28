@@ -1,1 +1,5 @@
 archive/
+replication_results_multi.csv
+__pycache__/
+convergence_results.npz
+convergence_plot.pdf
