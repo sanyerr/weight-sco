@@ -1,40 +1,40 @@
 # Weighted Soft Condorcet Optimization
 
-This repository contains the implementation and experimental suite for the paper **"Weighted Soft Condorcet Optimization."** Weighted SCO extends the Soft Condorcet Optimization framework (Lanctot et al., 2025) by incorporating Vigna's weighted Kendall-tau distance. This approach prioritizes ranking accuracy at the "head" of the list, making it more effective for identifying top-performing agents.
+This repository contains the code for the paper **"Weighted Soft Condorcet Optimization."** Weighted SCO extends Soft Condorcet Optimization (Lanctot et al., 2025) by incorporating weights that prioritize disagreements at the top of the rankings.
 
 ## Overview
 
 While standard SCO treats all pairwise disagreements equally, Weighted SCO assigns higher penalties to disagreements at top-ranked positions using hyperbolic or quadratic weighting functions.
 
-**Key Findings:**
+**Key findings:**
 * **Condorcet Efficiency:** Hyperbolic weighted SCO discovers Condorcet winners more frequently than unweighted SCO (93.4% vs 81.9%).
 * **Top-k Accuracy:** Shows modest improvements when ground truth is available.
 * **The Trade-off:** Weighted methods naturally perform worse on Kemeny-Young metrics, which are unweighted by definition.
 
-## Requirements & Setup
+## Requirements & setup
 
 * **Environment:** Python 3.x, NumPy, pandas, tqdm, [preflibtools](https://pypi.org/project/preflibtools/).
 * **Data:** Real-world experiments require [PrefLib data](https://www.preflib.org/).
 
 ---
 
-## Repository Structure
+## Repository structure
 
-### 1. Core Implementation
+### 1. Core
 | File | Description |
 | :--- | :--- |
 | `sco.py` | Core algorithm: `update_ratings_batch()` implements SGD with weighted gradient accumulation. |
 | `loss.py` | Sigmoid loss function and gradient computation for soft Kendall-tau. |
 
-### 2. Experiments (Reproducing the Paper)
+### 2. Experiments
 | Section | Script | Description |
 | :--- | :--- | :--- |
 | **6.1 (PrefLib)** | `run_batch.py` | Runs uniform/hyperbolic/quadratic SCO on files with $\le 10$ candidates. |
 | **6.2 (Synthetic)** | `synthetic_experiment_merged.py` | Tests tournaments with known ground truth ratings. |
-| **Efficiency** | `condorcet_experiment.py` | Tests all PrefLib files (no candidate limit) for Condorcet winner detection. |
+| **Condorcet winners** | `condorcet_experiment.py` | Tests all PrefLib files (no candidate limit) for Condorcet winner detection. |
 
 ### 3. Analysis & Tables
-| To Generate... | Run Script... | Input Data Source |
+| To generate... | Run script... | Input data source |
 | :--- | :--- | :--- |
 | **Table 1** | `analyze_kemeny-young_results.py` | `replication_results_multi.csv` |
 | **Tables 2-3** | `analyze_synthetic_results.py` | `synthetic_results_merged.csv` |
@@ -42,7 +42,7 @@ While standard SCO treats all pairwise disagreements equally, Weighted SCO assig
 
 ---
 
-## Weighting Functions
+## Weighting functions
 
 For rank positions $i < j$ (0-indexed), we implement the following weights:
 
