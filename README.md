@@ -40,9 +40,6 @@ While standard SCO treats all pairwise disagreements equally, Weighted SCO assig
 | **Tables 2-3** | `analyze_synthetic_results.py` | `synthetic_results_merged.csv` |
 | **Win Rates** | `calculate_condorcet_result.py` | `condorcet_efficiency_full.csv` |
 
-> [!TIP]
-> Utilities for loading datasets and calculating brute-force Kemeny-optimal rankings are located in `experiment.py` and `ground_truth.py`.
-
 ---
 
 ## Weighting Functions
