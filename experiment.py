@@ -1,24 +1,24 @@
 import random
-import numpy as np
 from preflibtools.instances import OrdinalInstance
 from sco import update_ratings_batch
 
-def load_preflib_pairs(filename):
-    """Parses a SOC/SOI file into a list of (winner, loser) tuples."""
+def load_multi_datasets(filename):
+    """
+    Parses a SOC/SOI file and returns THREE datasets:
+    1. Uniform pairs (weight = 1.0)
+    2. Weighted pairs (Vigna weights)
+    3. Quadratic pairs (Squared inverse weights)
+    """
     instance = OrdinalInstance()
     instance.parse_file(filename)
     
-    all_pairs = []
+    uniform_pairs = []
+    weighted_pairs = []
+    quadratic_pairs = []
     
-    # Iterate over unique orders and their counts
-    # preflibtools stores unique rankings in 'instance.orders'
-    # and the count of each ranking in 'instance.multiplicity'
     for ranking in instance.orders:
         count = instance.multiplicity[ranking]
         
-        # Flatten tuple if ties exist
-        # Example ranking with ties: (1, (2, 3), 4) -> 1 beats {2,3} beats 4
-        # We assume strict orders for simplicity, treating (2,3) as having no pair between them
         flat_ranking = []
         for item in ranking:
             if isinstance(item, (list, set, tuple)): 
@@ -26,61 +26,71 @@ def load_preflib_pairs(filename):
             else: 
                 flat_ranking.append(item)
             
-        # Create all pairwise comparisons
-        vote_pairs = []
+        uni_batch = []
+        wei_batch = []
+        quad_batch = []
+        
         for i in range(len(flat_ranking)):
             for j in range(i + 1, len(flat_ranking)):
-                #add weight based on positions
-                weight = (1.0 / (i + 1)) + (1.0 / (j + 1))
-                #weight = 1.0
-                vote_pairs.append((flat_ranking[i], flat_ranking[j], weight))
+                winner = flat_ranking[i]
+                loser = flat_ranking[j]
+                
+                # 1. Uniform
+                uni_batch.append((winner, loser, 1.0))
+                
+                # 2. Vigna Weighted
+                w_val = (1.0 / (i + 1)) + (1.0 / (j + 1))
+                wei_batch.append((winner, loser, w_val))
+                
+                # 3. Quadratic
+                q_val = (1.0 / ((i + 1)**2)) + (1.0 / ((j + 1)**2))
+                quad_batch.append((winner, loser, q_val))
 
-        # Add to dataset 'count' times
         for _ in range(count):
-            all_pairs.extend(vote_pairs)
+            uniform_pairs.extend(uni_batch)
+            weighted_pairs.extend(wei_batch)
+            quadratic_pairs.extend(quad_batch)
             
-    return all_pairs, instance.num_alternatives
+    return uniform_pairs, weighted_pairs, quadratic_pairs, instance.num_alternatives
 
-def run_experiment_on_file(filename):
-    """
-    Runs SCO on a single file and returns the stats.
-    """
-    # 1. Hyperparameters (Same as paper)
-    BATCH_SIZE = 32
-    ITERATIONS = 10000
-    LR = 0.01
-    TAU = 1.0
-    
-    try:
-        dataset, num_candidates = load_preflib_pairs(filename)
-    except Exception as e:
-        print(f"Skipping {filename}: {e}")
-        return None
-
-    if num_candidates < 2 or len(dataset) == 0:
-        return None
-    
+def train_model(dataset, num_candidates, iterations=10000, lr=0.01, tau=1.0):
+    """Helper to train a single SCO model."""
     ratings = {i: 50.0 for i in range(1, num_candidates + 1)}
+    batch_size = 32
     
-    # 2. Training Loop
-    for t in range(ITERATIONS):
-        batch = random.choices(dataset, k=BATCH_SIZE)
-        update_ratings_batch(ratings, batch, lr=LR, tau=TAU)
+    for _ in range(iterations):
+        batch = random.choices(dataset, k=batch_size)
+        update_ratings_batch(ratings, batch, lr=lr, tau=tau)
+        
+    return ratings
 
-    # 3. Return the results (instead of printing)
-    # Sort candidates by rating (descending)
-    sorted_ranking = sorted(ratings.items(), key=lambda x: x[1], reverse=True)
-    top_candidate = sorted_ranking[0][0]
+def run_multi_experiment_on_file(filename):
+    """
+    Runs Uniform, Weighted, and Quadratic SCO on the file.
+    Returns results for all three.
+    """
+    try:
+        uni_data, wei_data, quad_data, num_candidates = load_multi_datasets(filename)
+    except Exception as e:
+        return None
+
+    if num_candidates < 2 or len(uni_data) == 0:
+        return None
+    
+    # Train models
+    ratings_uni = train_model(uni_data, num_candidates)
+    ratings_wei = train_model(wei_data, num_candidates)
+    ratings_quad = train_model(quad_data, num_candidates)
+    
+    # Sort rankings
+    ranking_uni = sorted(ratings_uni.keys(), key=lambda x: ratings_uni[x], reverse=True)
+    ranking_wei = sorted(ratings_wei.keys(), key=lambda x: ratings_wei[x], reverse=True)
+    ranking_quad = sorted(ratings_quad.keys(), key=lambda x: ratings_quad[x], reverse=True)
     
     return {
         "filename": filename,
         "num_candidates": num_candidates,
-        "num_votes": len(dataset), # Approximation of total pairwise comparisons
-        "top_candidate": top_candidate,
-        "final_ratings": ratings
+        "ranking_uniform": ranking_uni,
+        "ranking_weighted": ranking_wei,
+        "ranking_quadratic": ranking_quad
     }
-
-if __name__ == "__main__":
-    # Test on one file to make sure it still works
-    res = run_experiment_on_file("../Data/PrefLib-Data-main/datasets/00001 - irish/00001-00000001.soi")
-    print(res["top_candidate"])
