@@ -8,6 +8,7 @@ CHANGES:
 - Uses safe memory management.
 """
 
+import math
 import os
 import csv
 import multiprocessing
@@ -37,12 +38,11 @@ def load_and_process_file(filepath):
         cw = find_condorcet_winner(filepath)
         
         if cw is None:
-            # RETURN A RESULT RECORDING "NO WINNER"
             return {
                 "file": filename,
                 "status": "NO_CW",
                 "cw": "N/A",
-                "uni_ok": "N/A", "wei_ok": "N/A", "quad_ok": "N/A"
+                "uni_ok": "N/A", "wei_ok": "N/A", "quad_ok": "N/A", "log_ok": "N/A"
             }
             
         # 2. Parse file
@@ -54,18 +54,20 @@ def load_and_process_file(filepath):
         uniform_pairs = []
         weighted_pairs = []
         quadratic_pairs = []
-        
+        logarithmic_pairs = []
+
         for ranking in instance.orders:
             count = instance.multiplicity[ranking]
             flat_ranking = []
             for item in ranking:
                 if isinstance(item, (list, tuple, set)): flat_ranking.extend(item)
                 else: flat_ranking.append(item)
-            
+
             u_batch = []
             w_batch = []
             q_batch = []
-            
+            l_batch = []
+
             for i in range(len(flat_ranking)):
                 for j in range(i + 1, len(flat_ranking)):
                     winner, loser = flat_ranking[i], flat_ranking[j]
@@ -74,43 +76,48 @@ def load_and_process_file(filepath):
                     w_batch.append((winner, loser, w_val))
                     q_val = (1.0 / ((i + 1)**2)) + (1.0 / ((j + 1)**2))
                     q_batch.append((winner, loser, q_val))
-            
+                    l_val = (1.0 / math.log(i + math.e)) + (1.0 / math.log(j + math.e))
+                    l_batch.append((winner, loser, l_val))
+
             for _ in range(count):
                 uniform_pairs.extend(u_batch)
                 weighted_pairs.extend(w_batch)
                 quadratic_pairs.extend(q_batch)
+                logarithmic_pairs.extend(l_batch)
 
         del instance
         
         if not uniform_pairs:
             return {
                 "file": filename, "status": "EMPTY",
-                "cw": "N/A", "uni_ok": "N/A", "wei_ok": "N/A", "quad_ok": "N/A"
+                "cw": "N/A", "uni_ok": "N/A", "wei_ok": "N/A", "quad_ok": "N/A", "log_ok": "N/A"
             }
 
         # 3. Run SCO Models
         win_u = run_custom_sco(uniform_pairs, num_candidates)
         win_w = run_custom_sco(weighted_pairs, num_candidates)
         win_q = run_custom_sco(quadratic_pairs, num_candidates)
-        
-        del uniform_pairs, weighted_pairs, quadratic_pairs
+        win_l = run_custom_sco(logarithmic_pairs, num_candidates)
+
+        del uniform_pairs, weighted_pairs, quadratic_pairs, logarithmic_pairs
         gc.collect()
-        
+
         return {
             "file": filename,
             "status": "OK",
             "cw": cw,
-            "uni_win": win_u, "wei_win": win_w, "quad_win": win_q,
+            "uni_win": win_u, "wei_win": win_w, "quad_win": win_q, "log_win": win_l,
             "uni_ok": 1 if win_u == cw else 0,
             "wei_ok": 1 if win_w == cw else 0,
-            "quad_ok": 1 if win_q == cw else 0
+            "quad_ok": 1 if win_q == cw else 0,
+            "log_ok": 1 if win_l == cw else 0
         }
         
     except Exception as e:
         return {
             "file": filename,
             "status": "ERROR",
-            "cw": "N/A", "uni_ok": "N/A", "wei_ok": "N/A", "quad_ok": "N/A"
+            "cw": "N/A", "uni_ok": "N/A", "wei_ok": "N/A", "quad_ok": "N/A", "log_ok": "N/A"
         }
 
 def get_processed_files(output_file):
@@ -128,7 +135,7 @@ def get_processed_files(output_file):
     return processed
 
 def main():
-    DATA_DIR = "../Data/PrefLib-Data-main"
+    DATA_DIR = "Data/PrefLib-Data-main"
     OUTPUT_FILE = "condorcet_efficiency_full.csv"
     
     # 1. Find all files
@@ -155,7 +162,7 @@ def main():
     with open(OUTPUT_FILE, mode, newline='') as f:
         writer = csv.writer(f)
         if mode == 'w':
-            writer.writerow(["file", "status", "cw", "uni_win", "wei_win", "quad_win", "uni_ok", "wei_ok", "quad_ok"])
+            writer.writerow(["file", "status", "cw", "uni_win", "wei_win", "quad_win", "log_win", "uni_ok", "wei_ok", "quad_ok", "log_ok"])
         
         with multiprocessing.Pool(SAFE_NUM_WORKERS, maxtasksperchild=10) as pool:
             # We wrap the iterator in try-except to catch the IndexError gracefully
@@ -165,8 +172,8 @@ def main():
                     if res:
                         writer.writerow([
                             res["file"], res["status"], res["cw"],
-                            res.get("uni_win", ""), res.get("wei_win", ""), res.get("quad_win", ""),
-                            res["uni_ok"], res["wei_ok"], res["quad_ok"]
+                            res.get("uni_win", ""), res.get("wei_win", ""), res.get("quad_win", ""), res.get("log_win", ""),
+                            res["uni_ok"], res["wei_ok"], res["quad_ok"], res["log_ok"]
                         ])
                         f.flush()
             except Exception as e:

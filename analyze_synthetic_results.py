@@ -36,16 +36,22 @@ def analyze_synthetic_results(filename="synthetic_results_merged.csv"):
     # ---------------------------------------------------------
     # TABLE 1: GLOBAL METRICS (KTD, MTRD)
     # ---------------------------------------------------------
-    print("\n" + "="*80)
+    # Check if weighted KTD columns exist
+    has_wktd = 'wktd_hyp' in df.columns
+
+    print("\n" + "="*120)
     print("GLOBAL METRICS (Replicates Section 7.2.1)")
-    print("="*80)
-    print(f"{'Dist':<10} | {'Contests':<8} | {'Weight':<10} | {'KTD':<18} | {'MTRD':<18}")
-    print("-" * 80)
+    print("="*120)
+    if has_wktd:
+        print(f"{'Dist':<10} | {'Contests':<8} | {'Weight':<10} | {'KTD':<18} | {'MTRD':<18} | {'WKTD (hyp)':<18} | {'WKTD (quad)':<18}")
+    else:
+        print(f"{'Dist':<10} | {'Contests':<8} | {'Weight':<10} | {'KTD':<18} | {'MTRD':<18}")
+    print("-" * 120)
 
     # Grouping order matches paper: Dist -> Contests -> Weight
     distributions = ["uniform", "skill_matched"]
     contest_counts = sorted(df['contests'].unique())
-    weights = ["uniform", "vigna", "quadratic"]
+    weights = ["uniform", "vigna", "quadratic", "logarithmic"]
 
     for dist in distributions:
         print(f"--- {dist.upper()} DISTRIBUTION ---")
@@ -53,18 +59,23 @@ def analyze_synthetic_results(filename="synthetic_results_merged.csv"):
             for w in weights:
                 # Filter data
                 subset = df[
-                    (df['dist'] == dist) & 
-                    (df['contests'] == n) & 
+                    (df['dist'] == dist) &
+                    (df['contests'] == n) &
                     (df['weight'] == w)
                 ]
-                
+
                 if len(subset) == 0:
                     continue
 
                 ktd_str = format_stat(subset['ktd'])
                 mtrd_str = format_stat(subset['mtrd'])
-                
-                print(f"{dist:<10} | {n:<8} | {w:<10} | {ktd_str:<18} | {mtrd_str:<18}")
+
+                if has_wktd:
+                    wktd_hyp_str = format_stat(subset['wktd_hyp'])
+                    wktd_quad_str = format_stat(subset['wktd_quad'])
+                    print(f"{dist:<10} | {n:<8} | {w:<10} | {ktd_str:<18} | {mtrd_str:<18} | {wktd_hyp_str:<18} | {wktd_quad_str:<18}")
+                else:
+                    print(f"{dist:<10} | {n:<8} | {w:<10} | {ktd_str:<18} | {mtrd_str:<18}")
         print("")
 
 
@@ -115,7 +126,7 @@ def analyze_statistical_significance(filename="synthetic_results_merged.csv"):
 
     print(f"Loaded {len(df)} trials.")
 
-    weights = ["uniform", "vigna", "quadratic"]
+    weights = ["uniform", "vigna", "quadratic", "logarithmic"]
     weight_pairs = list(combinations(weights, 2))
     metrics = ["top1", "top3p", "top5p", "top5_ktd"]
     metric_labels = {
@@ -239,7 +250,7 @@ def analyze_significance_summary(filename="synthetic_results_merged.csv"):
         print(f"Error: Could not find {filename}.")
         return
 
-    weights = ["uniform", "vigna", "quadratic"]
+    weights = ["uniform", "vigna", "quadratic", "logarithmic"]
     weight_pairs = list(combinations(weights, 2))
     metrics = ["top1", "top3p", "top5p", "top5_ktd"]
 
@@ -294,7 +305,7 @@ def analyze_significance_summary(filename="synthetic_results_merged.csv"):
         print("-" * 120)
 
     print("\nLegend: *** p < Bonferroni-corrected, * p < 0.05, n.s. = not significant, = = identical")
-    print("        Winner shown (uni=uniform, vig=vigna, qua=quadratic)")
+    print("        Winner shown (uni=uniform, vig=vigna, qua=quadratic, log=logarithmic)")
 
 
 if __name__ == "__main__":

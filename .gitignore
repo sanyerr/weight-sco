@@ -1,5 +1,30 @@
-archive/
-replication_results_multi.csv
+# Python
 __pycache__/
+.venv/
+
+# Generated results (large CSVs, binary data)
 convergence_results.npz
-convergence_plot.pdf
+replication_results_multi.csv
+condorcet_efficiency_full.csv
+synthetic_results_merged.csv
+
+# Generated plots
+*.pdf
+
+# LaTeX writeup and build artifacts
+writeup/
+
+# Data (too large for git)
+Data/
+
+# Private documents
+Documents/
+
+# Archived experiments
+experiments/
+
+# Result copies
+results/
+
+# Old archive
+archive/

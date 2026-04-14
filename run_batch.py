@@ -37,22 +37,23 @@ def process_single_file_multi(filepath):
         ranking_uni = result["ranking_uniform"]
         ranking_wei = result["ranking_weighted"]
         ranking_quad = result["ranking_quadratic"]
+        ranking_log = result["ranking_logarithmic"]
         num_cands = result["num_candidates"]
 
         # --- 3. Compute Metrics ---
-        
+
         def compute_metrics(predicted_ranking, true_ranking, cw):
             stats = {}
             if cw is not None:
                 stats["cw_found"] = 1 if predicted_ranking[0] == cw else 0
             else:
-                stats["cw_found"] = -1 
+                stats["cw_found"] = -1
 
             dist = normalized_kendall_tau_distance(predicted_ranking, true_ranking)
             stats["kt_dist"] = f"{dist:.4f}"
-            
+
             stats["top1_match"] = top_1_match(predicted_ranking, true_ranking)
-            
+
             for k in TOP_K_VALUES:
                 if num_cands >= k:
                     ov = top_k_overlap(predicted_ranking, true_ranking, k)
@@ -64,25 +65,30 @@ def process_single_file_multi(filepath):
         stats_uni = compute_metrics(ranking_uni, kemeny_ranking, condorcet_winner)
         stats_wei = compute_metrics(ranking_wei, kemeny_ranking, condorcet_winner)
         stats_quad = compute_metrics(ranking_quad, kemeny_ranking, condorcet_winner)
+        stats_log = compute_metrics(ranking_log, kemeny_ranking, condorcet_winner)
 
         # Build Row
         row = [
             os.path.basename(filepath),
             num_cands,
             str(condorcet_winner) if condorcet_winner is not None else "None",
-            
+
             # Uniform
             stats_uni["cw_found"], stats_uni["kt_dist"], stats_uni["top1_match"],
             stats_uni.get("top3_ov", "N/A"), stats_uni.get("top5_ov", "N/A"),
-            
-            # Weighted (Vigna)
+
+            # Weighted (Vigna Hyperbolic)
             stats_wei["cw_found"], stats_wei["kt_dist"], stats_wei["top1_match"],
             stats_wei.get("top3_ov", "N/A"), stats_wei.get("top5_ov", "N/A"),
-            
+
             # Quadratic
             stats_quad["cw_found"], stats_quad["kt_dist"], stats_quad["top1_match"],
             stats_quad.get("top3_ov", "N/A"), stats_quad.get("top5_ov", "N/A"),
-            
+
+            # Logarithmic
+            stats_log["cw_found"], stats_log["kt_dist"], stats_log["top1_match"],
+            stats_log.get("top3_ov", "N/A"), stats_log.get("top5_ov", "N/A"),
+
             f"{elapsed:.4f}"
         ]
         return row
@@ -99,7 +105,7 @@ def get_candidate_count(filepath):
         return 999
 
 def main():
-    DATA_DIR = "../Data/PrefLib-Data-main"
+    DATA_DIR = "Data/PrefLib-Data-main"
     OUTPUT_FILE = "replication_results_multi.csv"
     
     print(f"Scanning {DATA_DIR}...")
@@ -120,6 +126,7 @@ def main():
         "Uni_CW_Found", "Uni_KT", "Uni_Top1", "Uni_Top3", "Uni_Top5",
         "Wei_CW_Found", "Wei_KT", "Wei_Top1", "Wei_Top3", "Wei_Top5",
         "Quad_CW_Found", "Quad_KT", "Quad_Top1", "Quad_Top3", "Quad_Top5",
+        "Log_CW_Found", "Log_KT", "Log_Top1", "Log_Top3", "Log_Top5",
         "Processing_Time"
     ]
 

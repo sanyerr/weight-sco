@@ -12,7 +12,7 @@ from ground_truth import find_condorcet_winner
 from sco import update_ratings_batch
 
 # --- CONFIGURATION ---
-DATA_DIR = "../Data/PrefLib-Data-main"
+DATA_DIR = "Data/PrefLib-Data-main"
 ITERATIONS = 3000
 BATCH_SIZE = 32
 LEARNING_RATE = 0.01
@@ -53,23 +53,25 @@ def process_file_safe(filepath):
         cw = find_condorcet_winner(filepath)
         if cw is None:
             return None
-        
-        uni_data, wei_data, _, num_cands = load_multi_datasets(filepath)
-        
+
+        uni_data, hyp_data, quad_data, log_data, num_cands = load_multi_datasets(filepath)
+
         # Binary Categorization
         if num_cands <= 10:
             category = "Small"
         else:
             category = "Large"
-        
+
         hist_std = train_single_run(uni_data, num_cands, cw)
-        hist_wei = train_single_run(wei_data, num_cands, cw)
-        
+        hist_hyp = train_single_run(hyp_data, num_cands, cw)
+        hist_quad = train_single_run(quad_data, num_cands, cw)
+        hist_log = train_single_run(log_data, num_cands, cw)
+
         # Explicit cleanup
-        del uni_data, wei_data
+        del uni_data, hyp_data, quad_data, log_data
         gc.collect()
-        
-        return (category, hist_std, hist_wei)
+
+        return (category, hist_std, hist_hyp, hist_quad, hist_log)
 
     except Exception:
         return None
@@ -86,42 +88,47 @@ def run_training():
     print(f"Found {len(all_files)} files. Targeting {MAX_INSTANCES_PER_CAT} per category...")
 
     results = {
-        "Small": {"std": [], "wei": []},
-        "Large": {"std": [], "wei": []}
+        "Small": {"std": [], "hyp": [], "quad": [], "log": []},
+        "Large": {"std": [], "hyp": [], "quad": [], "log": []}
     }
-    
+
     counts = {"Small": 0, "Large": 0}
 
     with multiprocessing.Pool(NUM_WORKERS) as pool:
         iterator = pool.imap_unordered(process_file_safe, all_files)
-        pbar = tqdm(total=MAX_INSTANCES_PER_CAT * 2) 
-        
+        pbar = tqdm(total=MAX_INSTANCES_PER_CAT * 2)
+
         for res in iterator:
             if res is not None:
-                cat, h_std, h_wei = res
-                
+                cat, h_std, h_hyp, h_quad, h_log = res
+
                 if counts[cat] < MAX_INSTANCES_PER_CAT:
                     results[cat]["std"].append(h_std)
-                    results[cat]["wei"].append(h_wei)
+                    results[cat]["hyp"].append(h_hyp)
+                    results[cat]["quad"].append(h_quad)
+                    results[cat]["log"].append(h_log)
                     counts[cat] += 1
                     pbar.update(1)
-            
+
             if counts["Small"] >= MAX_INSTANCES_PER_CAT and counts["Large"] >= MAX_INSTANCES_PER_CAT:
                 print("\nReached target sample size!")
                 pool.terminate()
                 break
-        
+
         pbar.close()
-    
+
     return results
 
 def save_results(results):
-    # Flatten structure for saving
-    np.savez(CACHE_FILE, 
+    np.savez(CACHE_FILE,
              small_std=results["Small"]["std"],
-             small_wei=results["Small"]["wei"],
+             small_hyp=results["Small"]["hyp"],
+             small_quad=results["Small"]["quad"],
+             small_log=results["Small"]["log"],
              large_std=results["Large"]["std"],
-             large_wei=results["Large"]["wei"])
+             large_hyp=results["Large"]["hyp"],
+             large_quad=results["Large"]["quad"],
+             large_log=results["Large"]["log"])
     print(f"Data saved to {CACHE_FILE}")
 
 def load_results():
@@ -129,14 +136,20 @@ def load_results():
         return None
     print(f"Loading cached data from {CACHE_FILE}...")
     data = np.load(CACHE_FILE)
+    # Check if this is the new format with all four weight types
+    if "small_hyp" not in data:
+        print("Cache is in old format, re-running experiments...")
+        return None
     return {
-        "Small": {"std": data["small_std"], "wei": data["small_wei"]},
-        "Large": {"std": data["large_std"], "wei": data["large_wei"]}
+        "Small": {"std": data["small_std"], "hyp": data["small_hyp"],
+                   "quad": data["small_quad"], "log": data["small_log"]},
+        "Large": {"std": data["large_std"], "hyp": data["large_hyp"],
+                   "quad": data["large_quad"], "log": data["large_log"]}
     }
 
 def plot_results(results):
     print("\nGenerating PDF Plot...")
-    
+
     # Attempt to use a nice style, fallback to default if not found
     try:
         plt.style.use('seaborn-v0_8-whitegrid')
@@ -145,34 +158,39 @@ def plot_results(results):
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     categories = ["Small", "Large"]
-    
+
     # Colors (Colorblind safe)
-    COLOR_STD = "#377eb8" # Blue
-    COLOR_WEI = "#e41a1c" # Red
-    
+    COLORS = {
+        "std":  "#377eb8",  # Blue
+        "log":  "#984ea3",  # Purple
+        "hyp":  "#e41a1c",  # Red
+        "quad": "#ff7f00",  # Orange
+    }
+    LABELS = {
+        "std":  "Uniform",
+        "log":  "Logarithmic",
+        "hyp":  "Hyperbolic",
+        "quad": "Quadratic",
+    }
+    WEIGHT_KEYS = ["std", "log", "hyp", "quad"]
+
     for idx, cat in enumerate(categories):
         ax = axes[idx]
-        
-        # Data might be a list or numpy array depending on load source
-        mat_std = np.array(list(results[cat]["std"]))
-        mat_wei = np.array(list(results[cat]["wei"]))
-        data_count = len(mat_std)
-        
+
+        data_count = len(results[cat]["std"])
+
         if data_count == 0:
             ax.text(0.5, 0.5, "No Data", ha='center')
             continue
 
-        # Calculate Means
-        mean_std = np.mean(mat_std, axis=0)
-        mean_wei = np.mean(mat_wei, axis=0)
-        
         x = np.arange(ITERATIONS)
-        
-        # Plotting
-        ax.plot(x, mean_std, label='Standard SCO', color=COLOR_STD, linewidth=2.5, alpha=0.9)
-        ax.plot(x, mean_wei, label='Weighted SCO', color=COLOR_WEI, linewidth=2.5, alpha=0.9)
-        
-        # Titles (Using standard <= to be safe)
+
+        for key in WEIGHT_KEYS:
+            mat = np.array(list(results[cat][key]))
+            mean = np.mean(mat, axis=0)
+            ax.plot(x, mean, label=LABELS[key], color=COLORS[key],
+                    linewidth=2.5, alpha=0.9)
+
         if cat == "Small":
             title = f"Small Instances (N <= 10)\n(Avg over {data_count} elections)"
         else:
@@ -180,20 +198,18 @@ def plot_results(results):
 
         ax.set_title(title, fontsize=14, fontweight='bold', pad=15)
         ax.set_xlabel("Training Iterations", fontsize=12)
-        
+
         if idx == 0:
             ax.set_ylabel("Avg Rank of Condorcet Winner\n(Lower is Better)", fontsize=12)
-        
-        # Styling
+
         ax.legend(loc="upper right", frameon=True, framealpha=1.0, fontsize=10)
         ax.grid(True, linestyle='--', alpha=0.6)
-        
-        # Remove top/right borders for a cleaner look
+
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_linewidth(0.8)
         ax.spines['bottom'].set_linewidth(0.8)
-        
+
         ax.set_ylim(bottom=-0.05)
 
     plt.tight_layout()

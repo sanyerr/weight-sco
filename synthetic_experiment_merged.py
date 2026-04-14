@@ -74,6 +74,11 @@ def weight_quadratic(i: int, j: int) -> float:
     """Quadratic weights: 1/(i+1)^2 + 1/(j+1)^2"""
     return (1.0 / ((i + 1)**2)) + (1.0 / ((j + 1)**2))
 
+def weight_logarithmic(i: int, j: int) -> float:
+    """Logarithmic weights: 1/ln(i+e) + 1/ln(j+e)"""
+    import math
+    return (1.0 / math.log(i + math.e)) + (1.0 / math.log(j + math.e))
+
 # =============================================================================
 # METRICS
 # =============================================================================
@@ -116,6 +121,21 @@ def top_k_kendall_tau(predicted: List[int], true_ranking: List[int], k: int) -> 
             disagreements += 1
     return disagreements
 
+def weighted_kendall_tau_distance(ranking_a: List[int], ranking_b: List[int],
+                                   weight_fn: Callable = None) -> float:
+    """Kendall-tau distance weighted by position in ranking_b (the reference)."""
+    pos_a = {agent: i for i, agent in enumerate(ranking_a)}
+    pos_b = {agent: i for i, agent in enumerate(ranking_b)}
+    common = set(ranking_a) & set(ranking_b)
+    distance = 0.0
+    for i, j in itertools.combinations(common, 2):
+        if (pos_a[i] < pos_a[j]) != (pos_b[i] < pos_b[j]):
+            # Weight by positions in the reference ranking
+            pi, pj = sorted([pos_b[i], pos_b[j]])
+            w = weight_fn(pi, pj) if weight_fn else 1.0
+            distance += w
+    return distance
+
 def top_1_correct(predicted: List[int], true_ranking: List[int]) -> int:
     return 1 if predicted[0] == true_ranking[0] else 0
 
@@ -132,6 +152,9 @@ class Result:
     # Global Metrics
     ktd: int
     mtrd: float
+    # Weighted Global Metrics
+    wktd_hyp: float
+    wktd_quad: float
     # Top-k Metrics
     top1_correct: int
     top3_precision: float
@@ -154,6 +177,8 @@ def run_single(num_agents: int, num_contests: int, distribution: str,
         seed=seed,
         ktd=kendall_tau_distance(sco_ranking, true_ranking),
         mtrd=mean_true_rating_distance(sco_ranking, true_ranking, true_ratings),
+        wktd_hyp=weighted_kendall_tau_distance(sco_ranking, true_ranking, weight_vigna),
+        wktd_quad=weighted_kendall_tau_distance(sco_ranking, true_ranking, weight_quadratic),
         top1_correct=top_1_correct(sco_ranking, true_ranking),
         top3_precision=top_k_precision(sco_ranking, true_ranking, k=3),
         top5_precision=top_k_precision(sco_ranking, true_ranking, k=5),
@@ -188,11 +213,11 @@ def run_merged_experiment(output_file="synthetic_results_merged.csv", num_agents
     if contest_counts is None: contest_counts = [10, 50, 100]
     distributions = ["uniform", "skill_matched"]
     
-    # Updated configs to include quadratic
     weight_configs = [
-        ("uniform", weight_uniform), 
+        ("uniform", weight_uniform),
         ("vigna", weight_vigna),
-        ("quadratic", weight_quadratic)
+        ("quadratic", weight_quadratic),
+        ("logarithmic", weight_logarithmic)
     ]
     
     total = len(contest_counts) * len(distributions) * len(weight_configs) * num_seeds
@@ -209,10 +234,11 @@ def run_merged_experiment(output_file="synthetic_results_merged.csv", num_agents
     # Save to CSV
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["contests", "dist", "weight", "seed", "ktd", "mtrd", "top1", "top3p", "top5p", "top5_ktd"])
+        writer.writerow(["contests", "dist", "weight", "seed", "ktd", "mtrd", "wktd_hyp", "wktd_quad", "top1", "top3p", "top5p", "top5_ktd"])
         for r in results:
-            writer.writerow([r.num_contests, r.distribution, r.weight_name, r.seed, 
-                             r.ktd, r.mtrd, r.top1_correct, r.top3_precision, r.top5_precision, r.top5_ktd])
+            writer.writerow([r.num_contests, r.distribution, r.weight_name, r.seed,
+                             r.ktd, r.mtrd, r.wktd_hyp, r.wktd_quad,
+                             r.top1_correct, r.top3_precision, r.top5_precision, r.top5_ktd])
     
     print_summary(results)
     return results

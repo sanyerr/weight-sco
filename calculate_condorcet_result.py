@@ -14,10 +14,11 @@ def calculate_stats():
     uni_results = []
     wei_results = []
     quad_results = []
-    
+    log_results = []
+
     with open(filename, 'r') as f:
         reader = csv.reader(f)
-        
+
         # Skip header if present
         try:
             header = next(reader)
@@ -26,28 +27,32 @@ def calculate_stats():
             return
 
         for row in reader:
-            # Format 1: Legacy (8 columns) - All these rows are valid
-            if len(row) == 8:
-                try:
-                    u = int(row[5]) # uni_ok
-                    w = int(row[6]) # wei_ok
-                    q = int(row[7]) # quad_ok
-                    
-                    uni_results.append(u)
-                    wei_results.append(w)
-                    quad_results.append(q)
-                except ValueError:
-                    continue # Skip bad lines
+            # Current format (11 columns): file, status, cw, uni_win, wei_win, quad_win, log_win, uni_ok, wei_ok, quad_ok, log_ok
+            if len(row) == 11:
+                status = row[1]
+                if status == "OK":
+                    try:
+                        u = int(row[7])
+                        w = int(row[8])
+                        q = int(row[9])
+                        l = int(row[10])
 
-            # Format 2: Verbose (9 columns) - Check status column
+                        uni_results.append(u)
+                        wei_results.append(w)
+                        quad_results.append(q)
+                        log_results.append(l)
+                    except ValueError:
+                        continue
+
+            # Legacy format (9 columns): file, status, cw, uni_win, wei_win, quad_win, uni_ok, wei_ok, quad_ok
             elif len(row) == 9:
                 status = row[1]
                 if status == "OK":
                     try:
-                        u = int(row[6]) # uni_ok shifted by 1
+                        u = int(row[6])
                         w = int(row[7])
                         q = int(row[8])
-                        
+
                         uni_results.append(u)
                         wei_results.append(w)
                         quad_results.append(q)
@@ -68,7 +73,8 @@ def calculate_stats():
     methods = [
         ("Standard SCO (Uniform)", uni_results),
         ("Weighted SCO (Vigna)", wei_results),
-        ("Quadratic SCO", quad_results)
+        ("Quadratic SCO", quad_results),
+        ("Logarithmic SCO", log_results)
     ]
 
     for name, data in methods:

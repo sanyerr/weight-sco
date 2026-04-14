@@ -1,7 +1,7 @@
 """
 Analyze Kemeny-Young Replication Results
 Replicates the table in Section 7.1 of the paper.
-Comparing: Standard (Uniform), Weighted (Vigna), and Quadratic SCO.
+Comparing: Standard (Uniform), Weighted (Vigna), Quadratic, and Logarithmic SCO.
 """
 
 import pandas as pd
@@ -25,7 +25,8 @@ def analyze_replication_results(filename="replication_results_multi.csv"):
     variants = [
         ("Standard SCO", "Uni"),
         ("Weighted SCO", "Wei"),
-        ("Quadratic SCO", "Quad")
+        ("Quadratic SCO", "Quad"),
+        ("Logarithmic SCO", "Log")
     ]
     
     metrics = [
@@ -39,9 +40,9 @@ def analyze_replication_results(filename="replication_results_multi.csv"):
     # ---------------------------------------------------------
     # PRINT RESULTS TABLE
     # ---------------------------------------------------------
-    print("\n" + "="*85)
-    print(f"{'Metric':<25} | {'Standard':<15} | {'Weighted':<15} | {'Quadratic':<15}")
-    print("="*85)
+    print("\n" + "="*105)
+    print(f"{'Metric':<25} | {'Standard':<15} | {'Weighted':<15} | {'Quadratic':<15} | {'Logarithmic':<15}")
+    print("="*105)
 
     for metric_name, col_template, agg_type in metrics:
         row_values = []
@@ -79,9 +80,9 @@ def analyze_replication_results(filename="replication_results_multi.csv"):
                 
             row_values.append(fmt_str)
 
-        print(f"{metric_name:<25} | {row_values[0]:<15} | {row_values[1]:<15} | {row_values[2]:<15}")
+        print(f"{metric_name:<25} | {row_values[0]:<15} | {row_values[1]:<15} | {row_values[2]:<15} | {row_values[3]:<15}")
 
-    print("="*85)
+    print("="*105)
 
     # ---------------------------------------------------------
     # CONDORCET SUBSET ANALYSIS (Sanity Check)
